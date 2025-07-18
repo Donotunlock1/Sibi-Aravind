@@ -7,9 +7,8 @@
     body { font-family: sans-serif; padding: 20px; background: #111; color: #eee; }
     h1 { color: #0ff; }
     input, button { margin-top: 10px; }
-    .video-card { border: 1px solid #444; margin-top: 20px; padding: 10px; position: relative; }
-    .thumb { width: 160px; height: 90px; object-fit: cover; margin-bottom: 10px; }
-    .delete-btn { position: absolute; top: 10px; right: 10px; background: #f33; color: #fff; border: none; padding: 5px 10px; cursor: pointer; }
+    .video-card { border: 1px solid #444; margin-top: 20px; padding: 10px; }
+    progress { width: 100%; height: 20px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -17,9 +16,10 @@
   <input type="text" id="titleInput" placeholder="Enter video title"><br>
   <input type="file" id="videoInput" accept="video/*"><br>
   <button onclick="uploadVideo()">Upload Video</button>
+  <progress id="uploadProgress" value="0" max="100" style="display:none;"></progress>
   <div id="videosContainer"></div>  <!-- Firebase SDKs -->  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+    import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -41,22 +41,30 @@
       const title = document.getElementById("titleInput").value.trim();
       if (!file || !title) return alert("Add a title and select a video");
 
-      const fileName = `${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, `videos/${fileName}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const progressBar = document.getElementById("uploadProgress");
+      progressBar.style.display = "block";
+      progressBar.value = 0;
 
-      await addDoc(collection(db, "videos"), { title, url, fileName, uploaded: new Date() });
-      alert("Uploaded ✅");
-      location.reload();
-    }
+      const storageRef = ref(storage, `videos/${Date.now()}-${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
 
-    async function deleteVideo(docId, fileName) {
-      if (!confirm("Delete this video?")) return;
-      await deleteDoc(doc(db, "videos", docId));
-      await deleteObject(ref(storage, `videos/${fileName}`));
-      alert("Deleted ❌");
-      location.reload();
+      uploadTask.on("state_changed", 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          progressBar.value = progress;
+        }, 
+        (error) => {
+          alert("Upload failed ❌");
+          console.error(error);
+          progressBar.style.display = "none";
+        }, 
+        async () => {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          await addDoc(collection(db, "videos"), { title, url, path: uploadTask.snapshot.ref.fullPath, uploaded: new Date() });
+          alert("Uploaded ✅");
+          location.reload();
+        }
+      );
     }
 
     async function loadVideos() {
@@ -64,15 +72,29 @@
       const container = document.getElementById("videosContainer");
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const id = docSnap.id;
         const div = document.createElement("div");
         div.className = "video-card";
 
-        const thumb = `<video class='thumb' src="${data.url}#t=2"></video>`;
-        const video = `<video controls width="320" src="${data.url}"></video>`;
-        const delBtn = `<button class='delete-btn' onclick="deleteVideo('${id}', '${data.fileName}')">Delete</button>`;
+        const thumb = document.createElement("video");
+        thumb.src = data.url;
+        thumb.width = 320;
+        thumb.controls = true;
+        thumb.currentTime = 2;
 
-        div.innerHTML = `${delBtn}<h3>${data.title}</h3>${thumb}<br>${video}`;
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "Delete";
+        delBtn.onclick = async () => {
+          if (confirm("Delete this video?")) {
+            await deleteDoc(doc(db, "videos", docSnap.id));
+            const fileRef = ref(storage, data.path);
+            await deleteObject(fileRef);
+            location.reload();
+          }
+        };
+
+        div.innerHTML = `<h3>${data.title}</h3>`;
+        div.appendChild(thumb);
+        div.appendChild(delBtn);
         container.appendChild(div);
       });
     }
