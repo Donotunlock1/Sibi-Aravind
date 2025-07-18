@@ -1,177 +1,82 @@
 <!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SibiTube</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      background: #f9f9f9;
-      color: #0f0f0f;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      background-color: #fff;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-    }
-    header .logo {
-      font-size: 22px;
-      font-weight: bold;
-      color: red;
-    }
-    header input[type="text"] {
-      width: 40%;
-      padding: 8px 12px;
-      border: 1px solid #ccc;
-      border-radius: 20px;
-    }
-    .dark-mode {
-      background: #181818;
-      color: #fff;
-    }
-    .dark-mode header {
-      background: #202020;
-    }
-    .main {
-      display: flex;
-    }
-    .sidebar {
-      width: 200px;
-      background: #fff;
-      padding: 16px;
-      height: 100vh;
-      border-right: 1px solid #ddd;
-    }
-    .sidebar a {
-      display: block;
-      padding: 10px;
-      color: #333;
-      text-decoration: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .sidebar a:hover {
-      background-color: #eee;
-    }
-    .content {
-      flex: 1;
-      padding: 16px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
-    }
-    .video-card {
-      background: #fff;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .video-card video, .video-card img {
-      width: 100%;
-      height: 160px;
-      object-fit: cover;
-    }
-    .video-info {
-      padding: 10px;
-    }
-    .video-info h4 {
-      font-size: 16px;
-      margin-bottom: 4px;
-    }
-    .video-info p {
-      font-size: 13px;
-      color: #555;
-    }
-    .dark-toggle {
-      margin-left: 20px;
-      cursor: pointer;
-      padding: 4px 8px;
-      background: #ccc;
-      border-radius: 4px;
-    }
-    .upload-section {
-      margin-top: 20px;
-      padding: 16px;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .upload-section input {
-      margin-bottom: 10px;
-    }
+    body { font-family: sans-serif; padding: 20px; background: #111; color: #eee; }
+    h1 { color: #0ff; }
+    input, button { margin-top: 10px; }
+    .video-card { border: 1px solid #444; margin-top: 20px; padding: 10px; position: relative; }
+    .thumb { width: 160px; height: 90px; object-fit: cover; margin-bottom: 10px; }
+    .delete-btn { position: absolute; top: 10px; right: 10px; background: #f33; color: #fff; border: none; padding: 5px 10px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <header>
-    <div class="logo">SibiTube</div>
-    <input type="text" placeholder="Search" id="searchBar">
-    <button class="dark-toggle" onclick="toggleDarkMode()">Toggle Dark Mode</button>
-  </header>
-  <div class="main">
-    <nav class="sidebar">
-      <a href="#">Home</a>
-      <a href="#">Trending</a>
-      <a href="#">Subscriptions</a>
-      <a href="#">Library</a>
-      <a href="#">History</a>
-      <a href="#upload">Upload</a>
-    </nav>
-    <section class="content" id="videoContainer">
-      <!-- Uploaded videos appear here -->
-    </section>
-  </div>  <div class="upload-section" id="upload">
-    <h3>Upload a Video</h3>
-    <input type="file" id="videoFile" accept="video/*"/><br>
-    <input type="text" id="videoTitle" placeholder="Video Title"/><br>
-    <button onclick="uploadVideo()">Upload</button>
-  </div>  <script>
-    function toggleDarkMode() {
-      document.body.classList.toggle('dark-mode');
+  <h1>SibiTube 🚀</h1>
+  <input type="text" id="titleInput" placeholder="Enter video title"><br>
+  <input type="file" id="videoInput" accept="video/*"><br>
+  <button onclick="uploadVideo()">Upload Video</button>
+  <div id="videosContainer"></div>  <!-- Firebase SDKs -->  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB0ebfqIb9r1rLIl9Be9tQ14tCbe7UHxlY",
+      authDomain: "sibitube3790.firebaseapp.com",
+      projectId: "sibitube3790",
+      storageBucket: "sibitube3790.appspot.com",
+      messagingSenderId: "161156034362",
+      appId: "1:161156034362:web:382e906d744396db8a6a03",
+      measurementId: "G-CZ9MWCQ6FG"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+    const db = getFirestore(app);
+
+    async function uploadVideo() {
+      const file = document.getElementById("videoInput").files[0];
+      const title = document.getElementById("titleInput").value.trim();
+      if (!file || !title) return alert("Add a title and select a video");
+
+      const fileName = `${Date.now()}-${file.name}`;
+      const storageRef = ref(storage, `videos/${fileName}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      await addDoc(collection(db, "videos"), { title, url, fileName, uploaded: new Date() });
+      alert("Uploaded ✅");
+      location.reload();
     }
 
-    function uploadVideo() {
-      const fileInput = document.getElementById('videoFile');
-      const titleInput = document.getElementById('videoTitle');
-
-      if (!fileInput.files.length || !titleInput.value.trim()) {
-        alert('Please select a video and enter a title.');
-        return;
-      }
-
-      const file = fileInput.files[0];
-      const title = titleInput.value;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const videoURL = e.target.result;
-        const container = document.getElementById('videoContainer');
-
-        const videoCard = document.createElement('div');
-        videoCard.className = 'video-card';
-        videoCard.innerHTML = `
-          <video src="${videoURL}" controls></video>
-          <div class="video-info">
-            <h4>${title}</h4>
-            <p>Uploaded just now</p>
-          </div>
-        `;
-
-        container.prepend(videoCard);
-        fileInput.value = '';
-        titleInput.value = '';
-      };
-      reader.readAsDataURL(file);
+    async function deleteVideo(docId, fileName) {
+      if (!confirm("Delete this video?")) return;
+      await deleteDoc(doc(db, "videos", docId));
+      await deleteObject(ref(storage, `videos/${fileName}`));
+      alert("Deleted ❌");
+      location.reload();
     }
+
+    async function loadVideos() {
+      const querySnapshot = await getDocs(collection(db, "videos"));
+      const container = document.getElementById("videosContainer");
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const id = docSnap.id;
+        const div = document.createElement("div");
+        div.className = "video-card";
+
+        const thumb = `<video class='thumb' src="${data.url}#t=2"></video>`;
+        const video = `<video controls width="320" src="${data.url}"></video>`;
+        const delBtn = `<button class='delete-btn' onclick="deleteVideo('${id}', '${data.fileName}')">Delete</button>`;
+
+        div.innerHTML = `${delBtn}<h3>${data.title}</h3>${thumb}<br>${video}`;
+        container.appendChild(div);
+      });
+    }
+
+    loadVideos();
   </script></body>
 </html>
